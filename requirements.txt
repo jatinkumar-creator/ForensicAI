@@ -1,0 +1,16 @@
+
+# Core data processing
+numpy
+pandas
+
+# User interface
+streamlit
+
+# Data visualization
+plotly
+
+# Geospatial visualization
+folium
+
+# Testing
+pytest

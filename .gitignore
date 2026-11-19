@@ -1,0 +1,56 @@
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+*.so
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Model files
+models/*.gguf
+models/*.bin
+models/*.safetensors
+models/*.pt
+models/*.pth
+
+# Private forensic evidence
+case_data/
+real_evidence/
+evidence_exports/
+private_cases/
+
+# Processed private evidence
+private_processed/
+
+# Temporary files
+temp/
+tmp/
+.cache/
+
+# OS files
+.DS_Store
+Thumbs.db

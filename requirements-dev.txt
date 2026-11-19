@@ -1,0 +1,7 @@
+
+# Development tools
+ipykernel
+jupyter
+pytest
+black
+ruff
