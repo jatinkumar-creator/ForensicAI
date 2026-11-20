@@ -1,8 +1,9 @@
 
 -- ForensicAI Evidence Registry
--- Database schema version 1.0
+-- Database schema version 1.1
 
 PRAGMA foreign_keys = ON;
+
 
 -- 1. Evidence records
 CREATE TABLE IF NOT EXISTS evidence_records (
@@ -44,6 +45,7 @@ CREATE TABLE IF NOT EXISTS evidence_records (
     examiner_reference TEXT
 );
 
+
 -- 2. Verification history
 CREATE TABLE IF NOT EXISTS verification_history (
     verification_id TEXT PRIMARY KEY,
@@ -55,6 +57,20 @@ CREATE TABLE IF NOT EXISTS verification_history (
             length(expected_sha256) = 64
             AND expected_sha256 NOT GLOB '*[^0-9a-fA-F]*'
         ),
+
+    -- Provenance of the expected reference hash
+    reference_source TEXT NOT NULL
+        CHECK (
+            reference_source IN (
+                'REGISTERED_BASELINE',
+                'ACQUISITION_RECORD',
+                'EXAMINER_SUPPLIED',
+                'OTHER',
+                'UNSPECIFIED'
+            )
+        ),
+
+    reference_description TEXT,
 
     observed_sha256 TEXT NOT NULL
         CHECK (
@@ -83,6 +99,7 @@ CREATE TABLE IF NOT EXISTS verification_history (
     )
 );
 
+
 -- 3. Audit history
 CREATE TABLE IF NOT EXISTS audit_logs (
     audit_id TEXT PRIMARY KEY,
@@ -101,6 +118,7 @@ CREATE TABLE IF NOT EXISTS audit_logs (
         REFERENCES evidence_records(evidence_id)
         ON DELETE RESTRICT
 );
+
 
 -- Indexes for common evidence lookups
 CREATE INDEX IF NOT EXISTS idx_evidence_case_id
