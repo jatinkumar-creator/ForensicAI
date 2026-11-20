@@ -206,3 +206,115 @@ BEGIN
         'Evidence handling events cannot be deleted.'
     );
 END;
+
+
+-- ============================================================
+-- 5. Case Management
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS cases (
+    case_id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT,
+    status TEXT NOT NULL DEFAULT 'OPEN'
+        CHECK (status IN ('OPEN', 'CLOSED')),
+    created_at_utc TEXT NOT NULL,
+    updated_at_utc TEXT NOT NULL,
+    closed_at_utc TEXT,
+    created_by TEXT,
+
+    CHECK (
+        (status = 'OPEN' AND closed_at_utc IS NULL)
+        OR
+        (status = 'CLOSED' AND closed_at_utc IS NOT NULL)
+    )
+);
+
+-- Index for case status and creation-date lookups.
+CREATE INDEX IF NOT EXISTS idx_cases_status
+    ON cases(status);
+
+CREATE INDEX IF NOT EXISTS idx_cases_created_at
+    ON cases(created_at_utc);
+
+
+-- ============================================================
+-- 6. Case Activity History
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS case_events (
+    event_id TEXT PRIMARY KEY,
+    case_id TEXT NOT NULL,
+    event_type TEXT NOT NULL
+        CHECK (
+            event_type IN (
+                'CREATED',
+                'UPDATED',
+                'CLOSED',
+                'REOPENED'
+            )
+        ),
+    event_timestamp_utc TEXT NOT NULL,
+    actor TEXT NOT NULL,
+    details_json TEXT,
+
+    FOREIGN KEY (case_id)
+        REFERENCES cases(case_id)
+        ON DELETE RESTRICT
+);
+
+CREATE INDEX IF NOT EXISTS idx_case_events_case_id
+    ON case_events(case_id);
+
+CREATE INDEX IF NOT EXISTS idx_case_events_timestamp
+    ON case_events(event_timestamp_utc);
+
+
+-- ============================================================
+-- 7. Preserve Existing Case References
+-- ============================================================
+-- Existing evidence records may already contain case IDs.
+-- Backfill those IDs instead of losing their associations.
+
+INSERT OR IGNORE INTO cases (
+    case_id,
+    title,
+    description,
+    status,
+    created_at_utc,
+    updated_at_utc
+)
+SELECT
+    case_id,
+    'Legacy case ' || case_id,
+    'Automatically preserved from existing evidence records.',
+    'OPEN',
+    MIN(registered_at_utc),
+    MIN(registered_at_utc)
+FROM evidence_records
+WHERE case_id IS NOT NULL
+  AND TRIM(case_id) <> ''
+GROUP BY case_id;
+
+
+-- ============================================================
+-- 8. Protect Append-Only Case Activity History
+-- ============================================================
+
+CREATE TRIGGER IF NOT EXISTS prevent_case_event_update
+BEFORE UPDATE ON case_events
+BEGIN
+    SELECT RAISE(
+        ABORT,
+        'Case events cannot be modified. Record a new event instead.'
+    );
+END;
+
+CREATE TRIGGER IF NOT EXISTS prevent_case_event_delete
+BEFORE DELETE ON case_events
+BEGIN
+    SELECT RAISE(
+        ABORT,
+        'Case events cannot be deleted.'
+    );
+END;
