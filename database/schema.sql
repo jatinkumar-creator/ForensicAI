@@ -132,3 +132,77 @@ CREATE INDEX IF NOT EXISTS idx_verification_evidence_id
 
 CREATE INDEX IF NOT EXISTS idx_audit_evidence_id
     ON audit_logs(evidence_id);
+
+
+-- 4. Evidence handling history
+-- Records documented custody and handling events.
+-- Events are append-only: corrections must be recorded
+-- as new events rather than modifying existing records.
+
+CREATE TABLE IF NOT EXISTS evidence_handling_events (
+    handling_event_id TEXT PRIMARY KEY,
+
+    evidence_id TEXT NOT NULL,
+
+    event_type TEXT NOT NULL
+        CHECK (
+            event_type IN (
+                'RECEIVED',
+                'TRANSFERRED',
+                'ACCESSED',
+                'EXAMINED',
+                'STORED',
+                'RELEASED',
+                'RETURNED',
+                'ARCHIVED',
+                'OTHER'
+            )
+        ),
+
+    event_timestamp_utc TEXT NOT NULL,
+    recorded_at_utc TEXT NOT NULL,
+
+    actor TEXT NOT NULL,
+
+    previous_custodian TEXT,
+    new_custodian TEXT,
+
+    location TEXT,
+    reason TEXT,
+    details_json TEXT,
+
+    FOREIGN KEY (evidence_id)
+        REFERENCES evidence_records(evidence_id)
+        ON DELETE RESTRICT
+);
+
+-- Indexes for handling history lookups.
+CREATE INDEX IF NOT EXISTS idx_handling_evidence_id
+    ON evidence_handling_events(evidence_id);
+
+CREATE INDEX IF NOT EXISTS idx_handling_event_timestamp
+    ON evidence_handling_events(event_timestamp_utc);
+
+CREATE INDEX IF NOT EXISTS idx_handling_event_type
+    ON evidence_handling_events(event_type);
+
+-- Prevent modification or deletion of recorded events.
+-- Corrections must be entered as new events.
+
+CREATE TRIGGER IF NOT EXISTS prevent_handling_event_update
+BEFORE UPDATE ON evidence_handling_events
+BEGIN
+    SELECT RAISE(
+        ABORT,
+        'Evidence handling events cannot be modified.'
+    );
+END;
+
+CREATE TRIGGER IF NOT EXISTS prevent_handling_event_delete
+BEFORE DELETE ON evidence_handling_events
+BEGIN
+    SELECT RAISE(
+        ABORT,
+        'Evidence handling events cannot be deleted.'
+    );
+END;
