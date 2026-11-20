@@ -136,3 +136,47 @@ def register_and_verify_evidence(
         "verification": verification_record,
         "verification_history": history,
     }
+
+
+def verify_registered_evidence(
+    db_path: str | Path,
+    evidence_id: str,
+    reference_source: str = "REGISTERED_BASELINE",
+    expected_sha256: str | None = None,
+    reference_description: str | None = None,
+    actor: str | None = None,
+) -> dict:
+    """
+    Verify an existing evidence record without registering it again.
+    """
+
+    if not isinstance(evidence_id, str) or not evidence_id.strip():
+        raise ValueError("A valid evidence ID is required.")
+
+    _validate_lifecycle_inputs(
+        reference_source=reference_source,
+        expected_sha256=expected_sha256,
+        reference_description=reference_description,
+        actor=actor,
+    )
+
+    verification_record = verify_evidence(
+        db_path=db_path,
+        evidence_id=evidence_id,
+        reference_source=reference_source,
+        expected_sha256=expected_sha256,
+        reference_description=reference_description,
+        actor=actor,
+    )
+
+    history = get_verification_history(
+        db_path=db_path,
+        evidence_id=evidence_id,
+    )
+
+    return {
+        "lifecycle_status": "COMPLETED",
+        "evidence_id": evidence_id,
+        "verification": verification_record,
+        "verification_history": history,
+    }

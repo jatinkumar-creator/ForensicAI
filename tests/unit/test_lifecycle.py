@@ -246,3 +246,119 @@ def test_original_evidence_is_not_modified(tmp_path):
     ).hexdigest()
 
     assert final_hash == original_hash
+
+def test_repeated_verification_preserves_same_evidence_id(tmp_path):
+    evidence_path = create_test_evidence(tmp_path)
+    db_path = create_test_database(tmp_path)
+
+    initial = register_and_verify_evidence(
+        db_path=db_path,
+        source_path=evidence_path,
+    )
+
+    original_id = initial["evidence_record"]["evidence_id"]
+
+    repeated = lifecycle.verify_registered_evidence(
+        db_path=db_path,
+        evidence_id=original_id,
+    )
+
+    assert repeated["lifecycle_status"] == "COMPLETED"
+    assert repeated["evidence_id"] == original_id
+    assert repeated["verification"]["verification_status"] == "MATCH"
+
+    from app.evidence.registry import list_evidence
+
+    records = list_evidence(db_path)
+
+    assert len(records) == 1
+    assert records[0]["evidence_id"] == original_id
+
+
+def test_repeated_verification_preserves_history(tmp_path):
+    evidence_path = create_test_evidence(tmp_path)
+    db_path = create_test_database(tmp_path)
+
+    initial = register_and_verify_evidence(
+        db_path=db_path,
+        source_path=evidence_path,
+    )
+
+    evidence_id = initial["evidence_record"]["evidence_id"]
+
+    original_content = evidence_path.read_bytes()
+    correct_hash = hashlib.sha256(original_content).hexdigest()
+
+    repeated = lifecycle.verify_registered_evidence(
+        db_path=db_path,
+        evidence_id=evidence_id,
+        reference_source="EXAMINER_SUPPLIED",
+        expected_sha256=correct_hash,
+        reference_description="Synthetic examiner reference",
+    )
+
+    history = repeated["verification_history"]
+
+    assert repeated["evidence_id"] == evidence_id
+    assert len(history) == 2
+
+    assert history[0]["evidence_id"] == evidence_id
+    assert history[1]["evidence_id"] == evidence_id
+
+    assert {
+        record["reference_source"] for record in history
+    } == {
+        "REGISTERED_BASELINE",
+        "EXAMINER_SUPPLIED",
+    }
+
+
+def test_repeated_verification_creates_audit_records(tmp_path):
+    from database.connection import get_connection
+
+    evidence_path = create_test_evidence(tmp_path)
+    db_path = create_test_database(tmp_path)
+
+    initial = register_and_verify_evidence(
+        db_path=db_path,
+        source_path=evidence_path,
+    )
+
+    evidence_id = initial["evidence_record"]["evidence_id"]
+
+    lifecycle.verify_registered_evidence(
+        db_path=db_path,
+        evidence_id=evidence_id,
+    )
+
+    connection = get_connection(db_path)
+
+    try:
+        rows = connection.execute(
+            """
+            SELECT action
+            FROM audit_logs
+            WHERE evidence_id = ?
+            ORDER BY event_timestamp_utc, audit_id
+            """,
+            (evidence_id,),
+        ).fetchall()
+
+        assert len(rows) == 2
+        assert all(
+            row["action"] == "EVIDENCE_VERIFICATION"
+            for row in rows
+        )
+
+    finally:
+        connection.close()
+
+
+def test_repeated_verification_rejects_invalid_evidence_id(tmp_path):
+    db_path = create_test_database(tmp_path)
+
+    with pytest.raises(ValueError, match="valid evidence ID"):
+        lifecycle.verify_registered_evidence(
+            db_path=db_path,
+            evidence_id="",
+        )
